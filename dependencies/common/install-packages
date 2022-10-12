@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+
+#
+# install-packages
+#
+# Copyright (C) 2022 by RStudio, PBC
+#
+# Unless you have received this program directly from RStudio pursuant
+# to the terms of a commercial license agreement with RStudio, then
+# this program is licensed to you under the terms of version 3 of the
+# GNU Affero General Public License. This program is distributed WITHOUT
+# ANY EXPRESS OR IMPLIED WARRANTY, INCLUDING THOSE OF NON-INFRINGEMENT,
+# MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. Please refer to the
+# AGPL (http://www.gnu.org/licenses/agpl-3.0.txt) for more details.
+#
+#
+
+set -e
+
+source "$(dirname "${BASH_SOURCE[0]}")/../tools/rstudio-tools.sh"
+section "Installing R Packages"
+
+# install dir
+INSTALL_DIR=`pwd`
+
+install()
+{
+PACKAGE=$1
+PACKAGE_DIR=$PACKAGE
+PACKAGE_VERSION=$2
+PACKAGE_GITHUB_ROOT=$3
+PACKAGE_BUILD_OPTIONS=$4
+
+# git clone if necessary
+if [ ! -d "$PACKAGE_DIR" ]
+then
+  if [[ -z "$RSTUDIO_GITHUB_LOGIN" ]]; then
+      # no supplied credentials, clone directly
+      git clone "https://github.com/$PACKAGE_GITHUB_ROOT/$PACKAGE.git"
+  else
+      # credentials supplied, use them
+      git clone "https://$RSTUDIO_GITHUB_LOGIN@github.com/$PACKAGE_GITHUB_ROOT/$PACKAGE.git"
+  fi
+fi
+
+# clean and checkout target branch
+cd $PACKAGE_DIR
+git checkout .
+git clean -df .
+git pull
+git checkout $PACKAGE_VERSION
+
+# append GitHub fields to DESCRIPTION
+# NOTE: older-style Github prefix required by Packrat 0.5.0;
+#       newer-style Remote prefix required by renv.
+PACKAGE_SHA1=`git rev-parse $PACKAGE_VERSION`
+cat <<EOF >> DESCRIPTION
+GithubRepo: $PACKAGE
+GithubUsername: rstudio
+GithubRef: $PACKAGE_VERSION
+GithubSHA1: $PACKAGE_SHA1
+RemoteType: github
+RemoteHost: api.github.com
+RemoteRepo: $PACKAGE
+RemoteUsername: rstudio
+RemoteRef: $PACKAGE_VERSION
+RemoteSha: $PACKAGE_SHA1
+Origin: RStudioIDE
+EOF
+
+# create source package (remove previous first)
+cd ..
+PACKAGE_ARCHIVE_PATTERN="$PACKAGE*.tar.gz"
+rm -f $PACKAGE_ARCHIVE_PATTERN
+
+# build package without vignettes, since vignettes may need e.g. knitr to build
+R CMD build --no-build-vignettes $PACKAGE_BUILD_OPTIONS "$PACKAGE"
+
+# modify filename to include SHA1
+PACKAGE_ARCHIVE=`ls $PACKAGE_ARCHIVE_PATTERN`
+PACKAGE_ARCHIVE_STEM=${PACKAGE_ARCHIVE%.tar.gz}
+PACKAGE_ARCHIVE_SHA1=${PACKAGE_ARCHIVE_STEM}_${PACKAGE_SHA1}.tar.gz
+mv $PACKAGE_ARCHIVE $PACKAGE_ARCHIVE_SHA1
+
+}
+
+# Packages embedded with the IDE. See also:
+#   src/cpp/session/CMakeLists.txt
+#   DependencyManager.java: "Dependency.embeddedPackage" vs. ".cranPackage"
+
+# we often embed these packages but are not currently
+# install rmarkdown main rstudio
+# install rsconnect main rstudio
+# install renv master rstudio
+
+# ascertain the site library. this is somewhat tricky since this script must
+# run on a variety of Linux distributions early in the Docker build process.
+# the lookup order is as follows:
+# 1. the first .Library.site, if defined; otherwise
+# 2. the last element of .libPaths()
+RPKGLIB=$(Rscript -e 'cat(if(length(.Library.site) > 0) { .Library.site[[1]] } else { tail(.libPaths(), n = 1) })')
+if [[ ! -w $RPKGLIB ]]; then
+  echo "$RPKGLIB is not writable. Creating user R library directory."
+  RPKGLIB=$(Rscript -e 'cat(path.expand(Sys.getenv("R_LIBS_USER")))')
+  mkdir -p "$RPKGLIB"
+fi
+
+# install packages needed to run tests
+for RPKG in rmarkdown renv testthat xml2 yaml; do
+    RINSTALLCMD="if("'!'"require($RPKG, quietly = TRUE)) { install.packages('$RPKG', lib='$RPKGLIB', repos='https://cran.rstudio.com/') }"
+    echo "> $RINSTALLCMD"
+    Rscript -e "$RINSTALLCMD"
+done
+
+# back to install-dir
+cd "$INSTALL_DIR"

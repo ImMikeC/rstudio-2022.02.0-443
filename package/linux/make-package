@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+
+set -e
+
+PKG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${PKG_DIR}/../../dependencies/tools/rstudio-tools.sh"
+
+# remember cwd for later restoration
+PREV_WD=$(pwd)
+
+# raise the limit on number of open files
+ulimit -n 2048
+
+PACKAGE_DIR=`pwd`
+
+if [ "$1" != "Desktop" ] && [ "$1" != "Electron" ] && [ "$1" != "Server" ]
+then
+   echo "error: must specify Desktop, Electron or Server as configuration"
+   exit 1
+fi
+
+if [ "$2" != "DEB" ] && [ "$2" != "RPM" ]
+then
+   echo "error: must specify DEB or RPM as package target"
+   exit 1
+fi
+
+# set up GWT module
+if [ "$1" = "Desktop" ] || [ "$1" == "Electron" ]; then
+   GWT_MAIN_MODULE=RStudioDesktop
+else
+   GWT_MAIN_MODULE=RStudioServer
+fi
+export GWT_MAIN_MODULE
+
+if test -z "$BUILD_DIR"
+then
+   # set build type( if necessary) and build dir
+   if test -z "$CMAKE_BUILD_TYPE"
+   then
+      CMAKE_BUILD_TYPE=RelWithDebInfo
+      BUILD_DIR=build-$1-$2
+   else
+      BUILD_DIR=build-$1-$2-$CMAKE_BUILD_TYPE
+   fi
+fi
+
+# make build directory absolute
+BUILD_DIR=$(readlink -f "$BUILD_DIR")
+
+# clean if requested
+if [ "$3" == "clean" ]
+then
+   # remove existing build dir
+   rm -rf $BUILD_DIR
+
+   # clean out ant build if in source tree
+   if [ -d "../../src/gwt" ]; then
+      cd ../../src/gwt
+      ant clean
+   fi
+   cd $PACKAGE_DIR
+fi
+
+if [ "$1" == "Desktop" ]
+then
+  INSTALL_DIR=rstudio
+else
+  INSTALL_DIR=rstudio-server
+fi
+
+set +x
+
+if has-program ninja
+then 
+   CMAKE_GENERATOR="Ninja"
+   MAKEFLAGS="-w dupbuild=warn ${MAKEFLAGS}"
+else
+   CMAKE_GENERATOR="Unix Makefiles"
+fi
+
+: ${CMAKE_INSTALL_PREFIX="/usr/lib/${INSTALL_DIR}"}
+
+echo "Building and packing with CMake Generator: $CMAKE_GENERATOR"
+
+PKG_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+echo $PKG_DIR
+
+GWT_BUILD="yes"
+mkdir -p $BUILD_DIR/gwt
+cd $BUILD_DIR
+if test -z "$NO_REBUILD"
+then
+   rm -f CMakeCache.txt
+   rm -rf $BUILD_DIR/_CPack_Packages
+else
+   GWT_BUILD="no"
+fi
+
+cmake -G"${CMAKE_GENERATOR}"                           \
+      -DRSTUDIO_TARGET=$1                              \
+      -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE             \
+      -DRSTUDIO_PACKAGE_BUILD=1                        \
+      -DCMAKE_INSTALL_PREFIX="${CMAKE_INSTALL_PREFIX}" \
+      -DGWT_BIN_DIR="$BUILD_DIR/gwt/bin"               \
+      -DGWT_WWW_DIR="$BUILD_DIR/gwt/www"               \
+      -DGWT_EXTRAS_DIR="$BUILD_DIR/gwt/extras"         \
+      -DGWT_BUILD="$GWT_BUILD"                         \
+      $PKG_DIR/../..
+
+cmake --build . --target all -- ${MAKEFLAGS}
+
+if [ "$2" != "DEB" ]
+then
+   fakeroot cpack --verbose --debug -G "$2"
+else
+   cpack --verbose --debug -G $2
+
+   # Fix permissions for non-development builds
+   if [ -z "${RSTUDIO_DEVELOPMENT_BUILD}" ]
+   then
+      $PKG_DIR/fix-debian-permissions `ls *.deb`
+   fi
+
+fi
+
+cd $PREV_WD
+

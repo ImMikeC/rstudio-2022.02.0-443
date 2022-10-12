@@ -1,0 +1,119 @@
+
+@external gwt-Label, gwt-TextBox;
+
+.panelContainer {
+   width: 525px;
+   height: 425px;
+}
+
+.panelContainerNoChooser {
+   width: 403px;
+   height: 425px;
+}
+
+.buildToolsPanel {
+   width: 100%;
+}
+
+.workspaceGrid {
+   margin-bottom: 10px;
+   width: 375px;
+}
+
+.enableCodeIndexing {
+   margin-left: 5px;
+   margin-bottom: 13px;
+}
+
+
+.useSpacesForTab {
+   margin-left: 5px;
+}
+
+.numberOfTabs {
+   margin-top: 5px;
+   margin-left: 25px;
+}
+
+.editingOption {
+   margin-top: 10px;
+   margin-left: 5px;
+}
+
+.encodingChooser {
+   margin-top: 3px;
+   margin-left: 10px;
+   margin-bottom: 15px;
+}
+
+.lineEndings {
+   margin-top: 14px;
+   margin-bottom: 12px;
+}
+
+.vcsSelectExtraSpaced {
+  margin-bottom: 20px;
+}
+
+.vcsOriginLabel {
+   margin-left: 5px;
+}
+
+.vcsOriginUrl {
+   margin-top: -3px;
+   margin-left: 5px;
+   border: 1px solid #BBB;
+   padding: 2px;
+   padding-right: 10px;
+}
+
+.vcsNoOriginUrl {
+   width: 150px;
+   color: #494949;
+}
+
+.directorySelector {
+   width: 375px;
+}
+
+.buildToolsAdditionalArguments {
+   width: 375px;
+   margin-bottom: 12px;
+}
+
+.buildToolsAdditionalArguments .gwt-Label {
+   margin-bottom: 2px;
+}
+
+.buildToolsAdditionalArguments .gwt-TextBox {
+   width: 100%;
+}
+
+.buildToolsCheckBox {
+   margin-left: -5px;
+}
+
+.buildToolsRoxygenize {
+   width: 100%;
+   margin-bottom: 12px;
+}
+
+.buildToolsDevtools {
+   margin-bottom: 10px;
+}
+
+.previewWebsite {
+   margin-top: 8px;
+}
+
+.infoLabel {
+   margin-top: 4px;
+   font-style: italic;
+   font-size: 0.9em;
+}
+
+.websiteOutputFormat {
+   margin-top: 16px;
+}
+
+
